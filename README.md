@@ -1,2 +1,2 @@
 # docker-b3
-Docker accompanying paper on BDA
+This is just a test
