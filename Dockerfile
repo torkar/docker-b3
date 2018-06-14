@@ -1,0 +1,2 @@
+####### Dockerfile #######
+FROM rocker/rstudio
