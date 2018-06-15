@@ -5,9 +5,7 @@ MAINTAINER Richard Torkar richard.torkar@gmail.com
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update -qq \ 
-  && apt-get -y --no-install-recommends install libglu1-mesa-dev \
-  && apt-get -y install build-essential \
-  && apt-get -y install libnlopt-dev
+  && apt-get -y install build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev
 
 RUN mkdir -p $HOME/.R/ \ 
   && echo "CXXFLAGS=-O3 -mtune=native -march=native -Wno-unused-variable -Wno-unused-function  -Wno-macro-redefined \n" >> $HOME/.R/Makevars \
