@@ -20,6 +20,6 @@ RUN mkdir -p $HOME/.R/ \
 RUN install2.r --error --deps TRUE \
   rstan \
   brms \
-  sjstats \
-  gridExtra \
+  gridExtra \
+  sjstats \
   && rm -rf /tmp/downloaded_packages/ /tmp/*.rds
