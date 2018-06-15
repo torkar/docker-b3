@@ -17,9 +17,7 @@ RUN mkdir -p $HOME/.R/ \
   && echo "CXXFLAGS+=-flto -Wno-unused-local-typedefs \n" >> /home/rstudio/.Rprofile \
   && echo "CXXFLAGS += -Wno-ignored-attributes -Wno-deprecated-declarations \n" >> /home/rstudio/.Rprofile
 
-RUN install2.r --error -s --deps TRUE \
-  rstan \
-  brms \
-  gridExtra \
-  sjstats \
+RUN install2.r --error --deps TRUE  rstan brms \
+#  gridExtra \
+#  sjstats \
   && rm -rf /tmp/downloaded_packages/ /tmp/*.rds
