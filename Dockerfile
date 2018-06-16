@@ -15,6 +15,9 @@ RUN mkdir -p $HOME/.R/ \
   && echo "options(mc.cores = parallel::detectCores())" >> /home/rstudio/.Rprofile
   
 RUN install2.r --error --deps TRUE rstan brms
+
 RUN install2.r --error --deps TRUE gridExtra
+
 RUN install2.r --error --deps TRUE sjstats
+
 RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
