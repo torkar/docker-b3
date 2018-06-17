@@ -5,7 +5,7 @@ MAINTAINER Richard Torkar richard.torkar@gmail.com
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update -qq \ 
-  && apt-get -y install build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev nano
+  && apt-get -y install build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev nano libgsl-dev
 
 RUN mkdir -p $HOME/.R/ \ 
   && echo "CXXFLAGS=-O3 -mtune=native -march=native -Wno-unused-variable -Wno-unused-function -Wno-macro-redefined" >> $HOME/.R/Makevars \
@@ -14,12 +14,12 @@ RUN mkdir -p $HOME/.R/ \
   && echo "rstan::rstan_options(auto_write = TRUE)" >> /home/rstudio/.Rprofile \
   && echo "options(mc.cores = parallel::detectCores())" >> /home/rstudio/.Rprofile
 
-#RUN install2.r --error --deps TRUE rstan 
+RUN install2.r --error rstan 
 
-#RUN install2.r --error --deps TRUE brms
+RUN install2.r --error brms
 
-#RUN install2.r --error --deps TRUE gridExtra
+RUN install2.r --error gridExtra
 
-#RUN install2.r --error --deps TRUE sjstats
+RUN install2.r --error sjstats
 
 RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
