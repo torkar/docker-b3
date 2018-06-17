@@ -13,11 +13,13 @@ RUN mkdir -p $HOME/.R/ \
   && echo "CXXFLAGS += -Wno-ignored-attributes -Wno-deprecated-declarations" >> $HOME/.R/Makevars \
   && echo "rstan::rstan_options(auto_write = TRUE)" >> /home/rstudio/.Rprofile \
   && echo "options(mc.cores = parallel::detectCores())" >> /home/rstudio/.Rprofile
-  
-RUN install2.r --error --deps TRUE rstan brms
 
-RUN install2.r --error --deps TRUE gridExtra
+#RUN install2.r --error --deps TRUE rstan 
 
-RUN install2.r --error --deps TRUE sjstats
+#RUN install2.r --error --deps TRUE brms
+
+#RUN install2.r --error --deps TRUE gridExtra
+
+#RUN install2.r --error --deps TRUE sjstats
 
 RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
