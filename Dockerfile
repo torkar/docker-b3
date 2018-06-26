@@ -1,10 +1,14 @@
 ####### Dockerfile #######
 FROM rocker/rstudio
-MAINTAINER Richard Torkar richard.torkar@gmail.com
+LABEL maintainer="richard.torkar@gmail.com"
 
 ENV DEBIAN_FRONTEND noninteractive
 
 COPY pt_1.1.tar.gz /home/rstudio/
+
+COPY data.csv /home/rstudio/
+
+COPY brms.R /home/rstudio/
 
 RUN apt-get update -qq \ 
   && apt-get -y install build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev nano libgsl-dev
