@@ -30,6 +30,8 @@ RUN install2.r --error sjstats
 
 RUN install2.r --error plyr
 
+RUN install2.r --error ggthemes
+
 RUN install2.r --error /home/rstudio/pt_1.1.tar.gz
 
 RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
