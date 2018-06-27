@@ -26,6 +26,8 @@ RUN install2.r --error brms
 
 RUN install2.r --error gridExtra
 
+RUN install2.r --error haven
+
 RUN install2.r --error sjstats
 
 RUN install2.r --error plyr
