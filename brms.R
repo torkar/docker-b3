@@ -1,21 +1,24 @@
 # MAINTAINER Richard Torkar richard.torkar@gmail.com
-# Version 0.3
+# Version 1.0
 #
 # Run this in RStudio to have plots automatically being taken care of:
 # https://www.rstudio.com
+# If you are lazy, who isn't(?) just run this if you have Docker installed:
+# docker run -d -p 8787:8787 -v "`pwd`":/home/rstudio/working -e PASSWORD=rstudio -e ROOT=TRUE torkar/docker-b3
+# then fire up your browser and enter localhost:8787 and the username and 
+# password: rstudio
 
 library(brms) # rethinking & rstanarm are other packages one can use instead
 library(bayesplot) # *the* package for plotting BDA output by Gabry et al.
-library(sjstats) #for ROPE tests
-library(gridExtra) # To place multiple plots in one plot
+library(sjstats) # for ROPE analysis
+library(gridExtra) # Multiple plots in one plot
 library(pt) # prospect theory package
 library(plyr)
-
 library(ggthemes) # We want simple clean plots
 ggplot2::theme_set(theme_tufte())
 bayesplot::color_scheme_set("darkgray")
 
-# For reproducibility
+# For reproducibility.
 SEED <- 61215 # My oldest boy was born 2006, Dec. 15 :)
 set.seed(SEED)
 
@@ -23,7 +26,8 @@ set.seed(SEED)
 options(mc.cores = parallel::detectCores())
 
 # Set the location for dataFile!
-dataFile <- "~/Documents/cth/Research Projects, Studies & Data/Bayesian/Study III/data.csv"
+#dataFile <- "~/Documents/cth/Research Projects, Studies & Data/Bayesian/Study III/data.csv"
+dataFile <- "/home/rstudio/data.csv"
 d <- read.csv2(dataFile, sep=";")
 
 # In total 70 observations (each subject tried both techniques and the exp 
@@ -44,7 +48,6 @@ str(d)
 
 # Let's plot some things so we get a feeling for how it looks like
 # First plot the density of each technique
-
 d$category_num <- as.numeric(d$category)
 d$technique_num <- as.numeric(d$technique)
 
@@ -86,7 +89,7 @@ m0.1 <- brm(formula = tp ~ technique + category + subject,
 
 # If we only sample from the priors, using N(0,1), and include our four 
 # additive terms, then var, since it's log intensity, is equal to (1*4)^2 = 16.
-# Hence, we need to have N(0,<<1).
+# Hence, we should have N(0,<<1).
 #
 # If we empirically check our hypothesis reg. priors by sampling n=100 from each 
 # posterior then max x when N(0, c(1, 0.1, 0.01)) is ~2*10^9 (with 30+ cases 
@@ -113,14 +116,19 @@ m0.01 <-
     )
 
 # Get 100 samples from the posteriors of each model
-v1 <- posterior_predict(m1, nsamples = 100)
-v0.1 <- posterior_predict(m0.1, nsamples = 100)
-v0.01 <- posterior_predict(m0.01, nsamples = 100)
+s1 <- posterior_predict(m1, nsamples = 100)
+s0.1 <- posterior_predict(m0.1, nsamples = 100)
+s0.01 <- posterior_predict(m0.01, nsamples = 100)
 
 #Check what the max values are
-max(v1, na.rm = T)
-max(v0.1, na.rm = T)
-max(v0.01, na.rm = T)
+max(s1, na.rm = T)
+# [1] 2122506522
+max(s0.1, na.rm = T)
+# [1] 42
+
+max(s0.01, na.rm = T)
+# [1] 8
+
 # So in short, we will be just fine using N(0,0.1), but as we will see Stan 
 # handles wider priors w/o a problem in this case. If we would have problems
 # with divergence and chains that do not mix well we need to look into this 
@@ -129,10 +137,11 @@ max(v0.01, na.rm = T)
 #
 # Set upper bound to 25 for the outcome (there were a total of 
 # 25 faults) and, for the last three models below, we try to predict the 
-# zero-inflation probability depending on the technique/category/subject used 
-# since we have 18.6% zeros in our response variable. Also, up the priors since
-# trunc affects the span of valid respones, i.e., 0:25. The same applies when 
-# using zi distributions, unfortunately...
+# zero-inflation probability depending on the technique used since we have 18.6% 
+# zeros in our response variable. Also, up the priors since trunc affects the 
+# span of valid respones, i.e., 0:25. The same applies when using zi 
+# distributions, unfortunately...
+
 # Number of zeros in our outcome variable:
 prop_zero <- function(x) mean(x == 0)
 prop_zero(d$tp) 
@@ -161,16 +170,15 @@ m2_zi_t <- brm(bf(formula = tp ~ technique + category +
 # Leave One Out cross sampling. 
 # https://arxiv.org/pdf/1507.04544.pdf
 # The LOOIC values should be as low as possible. 
-loo_res <- loo::loo(m2, m2_zi_t)
-loo_res
-#                LOOIC    SE
-# m2            326.23 21.81
-# m2_zi_t       322.79 21.90
-# m2 - m2_zi_t  3.44    5.50
+loo::loo(m2, m2_zi_t)
+#               LOOIC    SE
+# m2           326.24 21.89
+# m2_zi_t      323.00 22.07
+# m2 - m2_zi_t   3.24  5.50
 
 # So, the above indicates that using a zero-inflated Poisson (when 
 # zi depends on technique) has better prediction accuracy (lower LOOIC values),
-# but the SE diff is 5.50 while the absolute diff is 3.44 so not exactly 
+# but the SE diff is 5.50 while the absolute diff is ~3 so not exactly 
 # crystal clear.
 ################################################################################
 #
@@ -218,27 +226,25 @@ m4_vi_vs <- brm(bf(formula = tp ~ 1 + technique + category +
 # m4_vi_vs: as previous + varying slopes.
 #
 # We run with reloo=TRUE for exact leave-one-out cross-validation.
-loo_res <- loo::loo(m2, m2_zi_t, m3_vi, m4_vi_vs, reloo=T)
-loo_res
+loo::loo(m2, m2_zi_t, m3_vi, m4_vi_vs, reloo=T)
 # The above should end up in something like this:
 #                     LOOIC    SE
 # m2                 326.24 21.89
 # m2_zi_t            323.00 22.07
-# m3_vi              317.58 18.26
-# m4_vi_vs           316.30 17.52
+# m3_vi              317.90 18.60
+# m4_vi_vs           316.63 17.73
 # m2 - m2_zi_t         3.24  5.50
-# m2 - m3_vi           8.66  8.95
-# m2 - m4_vi_vs        9.95  8.97
-# m2_zi_t - m3_vi      5.42  6.65
-# m2_zi_t - m4_vi_vs   6.70  6.85
-# m3_vi - m4_vi_vs     1.29  2.19
+# m2 - m3_vi           8.34  8.79
+# m2 - m4_vi_vs        9.61  8.81
+# m2_zi_t - m3_vi      5.09  6.39
+# m2_zi_t - m4_vi_vs   6.37  6.61
+# m3_vi - m4_vi_vs     1.27  2.38
 #
-# As we see in the table fit_vs_vi, i.e. our varying intercept *and* varying 
+# As we see in the table fit_vi_vs, i.e. our varying intercept *and* varying 
 # slopes model has the best out of sample prediction. If we compare that model 
 # with fit_vi, i.e., our varying intercept model, we see that the absolute 
-# difference is 3.32 and that dSE=2.31. So, fit_vs_vi captures the variance and 
-# complexity of our data the best. But, the question is if we should pick that 
-# model. A varying slopes and varying intercepts model is very complex and some 
+# difference is 1.27 and that dSE=2.38. The question is if we should pick that 
+# model? A varying slopes and varying intercepts model is very complex and some 
 # would argue that that complexity literally doesn't add anything, or as 
 # R. McElreath would say "This is a model only a mother would love."
 #
@@ -254,57 +260,57 @@ M <- m3_vi
 tidy_stan(M, prob=.95, type="all")
 # Let's see a summary of the statistics the model has estimated. Here we 
 # print out all estimates so that we even get an estimate for each subject.
-# ## Conditional Model: Fixed effects
+## Conditional Model: Fixed effects
 # 
 #             estimate std.error      HDI(95%) neff_ratio Rhat mcse
-# Intercept       1.96      0.10 [ 1.77  2.15]          1    1    0
+# Intercept       1.96      0.10 [ 1.76  2.14]          1    1    0
 # techniqueOT    -1.42      0.17 [-1.77 -1.09]          1    1    0
-# categoryME      0.31      0.15 [ 0.01  0.60]          1    1    0
+# categoryME      0.32      0.15 [ 0.01  0.62]          1    1    0
 # 
 # ## Conditional Model: Random effect (Intercept)
 # 
-#            estimate std.error      HDI(95%) neff_ratio Rhat mcse
+#             estimate std.error      HDI(95%) neff_ratio Rhat mcse
 # subject.1      0.47      0.25 [-0.01  0.93]          1    1    0
-# subject.2     -0.17      0.23 [-0.67  0.26]          1    1    0
-# subject.3      0.05      0.21 [-0.36  0.54]          1    1    0
-# subject.4     -0.12      0.22 [-0.60  0.30]          1    1    0
-# subject.5      0.04      0.20 [-0.38  0.48]          1    1    0
-# subject.6     -0.04      0.21 [-0.49  0.38]          1    1    0
-# subject.7      0.24      0.23 [-0.14  0.72]          1    1    0
-# subject.8      0.10      0.21 [-0.32  0.57]          1    1    0
-# subject.9     -0.08      0.21 [-0.55  0.37]          1    1    0
-# subject.10    -0.07      0.22 [-0.56  0.36]          1    1    0
-# subject.11    -0.17      0.23 [-0.67  0.26]          1    1    0
-# subject.12    -0.08      0.22 [-0.56  0.37]          1    1    0
-# subject.13    -0.08      0.21 [-0.55  0.34]          1    1    0
-# subject.14     0.12      0.20 [-0.29  0.55]          1    1    0
-# subject.15     0.23      0.23 [-0.17  0.73]          1    1    0
+# subject.2     -0.17      0.23 [-0.66  0.26]          1    1    0
+# subject.3      0.05      0.22 [-0.38  0.53]          1    1    0
+# subject.4     -0.12      0.21 [-0.60  0.29]          1    1    0
+# subject.5      0.04      0.20 [-0.38  0.47]          1    1    0
+# subject.6     -0.03      0.21 [-0.49  0.39]          1    1    0
+# subject.7      0.24      0.22 [-0.16  0.70]          1    1    0
+# subject.8      0.10      0.22 [-0.32  0.58]          1    1    0
+# subject.9     -0.07      0.22 [-0.56  0.37]          1    1    0
+# subject.10    -0.08      0.21 [-0.55  0.36]          1    1    0
+# subject.11    -0.17      0.23 [-0.67  0.27]          1    1    0
+# subject.12    -0.08      0.21 [-0.58  0.35]          1    1    0
+# subject.13    -0.08      0.21 [-0.53  0.35]          1    1    0
+# subject.14     0.13      0.20 [-0.27  0.56]          1    1    0
+# subject.15     0.23      0.23 [-0.19  0.71]          1    1    0
 # subject.16    -0.12      0.22 [-0.61  0.30]          1    1    0
-# subject.17    -0.17      0.23 [-0.69  0.27]          1    1    0
-# subject.18    -0.18      0.23 [-0.70  0.26]          1    1    0
-# subject.19     0.08      0.21 [-0.36  0.51]          1    1    0
-# subject.20    -0.08      0.22 [-0.57  0.35]          1    1    0
-# subject.21     0.05      0.22 [-0.37  0.53]          1    1    0
-# subject.22     0.12      0.21 [-0.28  0.57]          1    1    0
-# subject.23    -0.08      0.21 [-0.53  0.36]          1    1    0
-# subject.24     0.02      0.19 [-0.39  0.44]          1    1    0
-# subject.25    -0.23      0.24 [-0.74  0.22]          1    1    0
-# subject.26     0.06      0.20 [-0.34  0.48]          1    1    0
-# subject.27     0.33      0.22 [-0.06  0.77]          1    1    0
-# subject.28     0.02      0.19 [-0.39  0.44]          1    1    0
-# subject.29    -0.09      0.21 [-0.56  0.33]          1    1    0
-# subject.30    -0.04      0.20 [-0.48  0.35]          1    1    0
-# subject.31    -0.18      0.22 [-0.69  0.24]          1    1    0
-# subject.32    -0.20      0.23 [-0.66  0.23]          1    1    0
-# subject.33    -0.01      0.20 [-0.43  0.41]          1    1    0
-# subject.34     0.23      0.21 [-0.15  0.67]          1    1    0
+# subject.17    -0.17      0.23 [-0.67  0.26]          1    1    0
+# subject.18    -0.17      0.24 [-0.70  0.27]          1    1    0
+# subject.19     0.08      0.20 [-0.32  0.53]          1    1    0
+# subject.20    -0.07      0.22 [-0.57  0.35]          1    1    0
+# subject.21     0.06      0.21 [-0.38  0.51]          1    1    0
+# subject.22     0.12      0.21 [-0.28  0.58]          1    1    0
+# subject.23    -0.08      0.21 [-0.55  0.34]          1    1    0
+# subject.24     0.02      0.19 [-0.37  0.46]          1    1    0
+# subject.25    -0.23      0.24 [-0.75  0.20]          1    1    0
+# subject.26     0.06      0.19 [-0.34  0.48]          1    1    0
+# subject.27     0.33      0.22 [-0.07  0.77]          1    1    0
+# subject.28     0.03      0.20 [-0.39  0.45]          1    1    0
+# subject.29    -0.09      0.21 [-0.59  0.32]          1    1    0
+# subject.30    -0.04      0.20 [-0.47  0.37]          1    1    0
+# subject.31    -0.18      0.23 [-0.68  0.25]          1    1    0
+# subject.32    -0.20      0.22 [-0.68  0.21]          1    1    0
+# subject.33    -0.01      0.20 [-0.41  0.41]          1    1    0
+# subject.34     0.23      0.21 [-0.16  0.66]          1    1    0
 # subject.35     0.14      0.21 [-0.26  0.60]          1    1    0
 # 
 # ## Zero-Inflated Model: Fixed effects
 # 
 #             estimate std.error      HDI(95%) neff_ratio Rhat mcse
-# Intercept      -3.62      0.91 [-5.67 -2.03]          1    1 0.01
-# techniqueOT     2.71      1.09 [ 0.59  5.14]          1    1 0.01
+# Intercept      -3.62      0.92 [-5.67 -2.03]          1    1 0.01
+# techniqueOT     2.70      1.11 [ 0.57  5.12]          1    1 0.01
 
 # Everything looks ok, but what sticks out is that \beta_c, represented here by
 # the variable categoryME, seems to be significant. The 95% Highest Density 
@@ -317,7 +323,7 @@ tidy_stan(M, prob=.95, type="all")
 # and then run the sampling procedure again.
 ################################################################################
 #
-# Check som diagnostics
+# Check some diagnostics
 #
 # Create trace plots to see that we have well-mixed chains, and density plots
 # of the parameters of interest.
@@ -385,12 +391,13 @@ p_zi_t <- mcmc_trace(posterior, pars = c("b_zi_techniqueOT")) +
 grid.arrange(p_intercept, p_tech, p_cat, p_zi_i, p_zi_t, p_sd, nrow=2)
 # We see well-mixed chains, as should be the case.
 
-# Let's finally examine neff and Rhat values also
+# Let's finally examine neff (should be >0.1)
 ratios_neff <- neff_ratio(M)
 mcmc_neff(ratios_neff)
 
+# and Rhat values also
 max(rhat(M))
-# Should be ~1.001 so well below 1.1
+# Should be ~1.001 so well below 1.1 :)
 
 # Plot y vs y_rep density
 ppc_dens_overlay(y=d$tp, 
@@ -433,7 +440,7 @@ ppc_cop <- pp_check(m_cop, type="intervals", prob=0.95) +
 
 grid.arrange(ppc_m, ppc_cop, nrow=2)
 ################################################################################
-# Make some sanity checks of our model, i.e. 
+# Make more sanity checks of our model, i.e. 
 # Look at density plots of params
 # Check pairs plot
 # Check marginal effects
@@ -464,7 +471,7 @@ plots[[9]] <- plots[[9]] + labs(subtitle=expression(italic(beta[c])))
 # Plot the new plot in RStudio. Check that it is a 3x3 plot (RStudio seems to 
 # be a bit shaky so sometimes it only plots the first 1...3 plots)
 bayesplot_grid(plots = plots)
-#####
+################################################################################
 
 # If we check the margeff we see instantaneous changes in the outcome depending 
 # on the predictors.
@@ -495,16 +502,15 @@ ppc_stat(y, yrep, stat="prop_zero") + theme(legend.position = "none")
 #
 # ROPE analysis on +/- 0.1
 equi_test(M, eff_size = 0.1)
-# H0 %inROPE      HDI(95%)
-# b_Intercept         reject    0.00 [ 1.77  2.15]
-# b_zi_Intercept      reject    0.00 [-5.67 -2.03]
-# b_techniqueOT       reject    0.00 [-1.77 -1.09]
-# b_categoryME     undecided    0.64 [ 0.01  0.60]
-# b_zi_techniqueOT    reject    0.03 [ 0.59  5.14]
+#                      H0 %inROPE      HDI(95%)
+# b_Intercept      reject    0.00 [ 1.76  2.14]
+# b_zi_Intercept   reject    0.00 [-5.67 -2.03]
+# b_techniqueOT    reject    0.00 [-1.77 -1.09]
+# b_categoryME     reject    0.57 [ 0.01  0.62]
+# b_zi_techniqueOT reject    0.04 [ 0.57  5.12]
 #
-# As is evident, \beta_c can not be rejected. This is an indication of \beta_c
-# not being as relevant as we thought. In short, it's not worthwhile taking it
-# separately into account for doing prospect theory analysis.
+# This is an indication of \beta_c not being as relevant as we thought. 
+
 ################################################################################
 #
 # One of the benefits of having a posterior distribution is that it's very easy
@@ -707,24 +713,25 @@ PTU_epsilon <- comparePT(choices_epsilon,
                  prob_weight_for_positive_outcomes=linear_in_log_odds_prob_weight,
                  prob_weight_for_negative_outcomes=linear_in_log_odds_prob_weight,
                  utility=tk_1992_utility, digits=4)
+# For bug = $150
+#   cid gid    ev    pt    ce    rp
+# 1   1   1   559 219.4 457.6 101.4
+# 2   1   2 636.5   233 489.9 146.6
+
 # For bug = $500
 #   cid gid   ev   pt   ce    rp
 # 1   1   1 3730 1311 3490 240.3
 # 2   1   2 3055 1006 2584 471.4
 #
-# For bug = $150
-#   cid gid    ev    pt    ce    rp
-# 1   1   1   559 219.4 457.6 101.4
-# 2   1   2 636.5   233 489.9 146.6
 
 PTU_tau <- comparePT(choices_tau,
                  prob_weight_for_positive_outcomes=linear_in_log_odds_prob_weight,
                  prob_weight_for_negative_outcomes=linear_in_log_odds_prob_weight,
                  utility=tk_1992_utility, digits=4)
 # For bug = $150
-#   cid gid   ev    pt    ce     rp
-# 1   1   1 3855  1306  3475  379.5
-# 2   1   2  415 203.1 419.1 -4.127
+#   cid gid   ev    pt    ce    rp
+# 1   1   1 1066   415 944.1 121.4
+# 2   1   2 33.5 20.73 31.35 2.153
 
 ################################################################################
 # Write our the compiler settings for reproducibility
