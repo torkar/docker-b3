@@ -22,13 +22,13 @@ RUN mkdir -p $HOME/.R/ \
 
 RUN install2.r --error plyr
 
+RUN install2.r --error haven
+
 RUN install2.r --error rstan 
 
 RUN install2.r --error brms
 
 RUN install2.r --error gridExtra
-
-RUN install2.r --error haven
 
 RUN install2.r --error sjstats
 
