@@ -24,8 +24,6 @@ RUN install2.r --error plyr
 
 RUN install2.r --error haven
 
-RUN install2.r --error rstan 
-
 RUN install2.r --error brms
 
 RUN install2.r --error gridExtra
@@ -35,5 +33,7 @@ RUN install2.r --error sjstats
 RUN install2.r --error ggthemes
 
 RUN install2.r --error /home/rstudio/pt_1.1.tar.gz
+
+RUN install2.r --error rstan 
 
 RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
