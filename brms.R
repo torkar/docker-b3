@@ -26,8 +26,8 @@ set.seed(SEED)
 options(mc.cores = parallel::detectCores())
 
 # Set the location for dataFile!
-dataFile <- "~/Documents/cth/Research Projects, Studies & Data/Bayesian/Study III/data.csv"
-#dataFile <- "/home/rstudio/data.csv"
+# dataFile <- "~/Documents/cth/Research Projects, Studies & Data/Bayesian/Study III/data.csv"
+dataFile <- "/home/rstudio/data.csv"
 d <- read.csv2(dataFile, sep=";")
 
 # In total 70 observations (each subject tried both techniques and the exp 
