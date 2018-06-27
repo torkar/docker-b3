@@ -11,7 +11,7 @@ COPY data.csv /home/rstudio/
 COPY brms.R /home/rstudio/
 
 RUN apt-get update -qq \ 
-  && apt-get -y install build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev nano libgsl-dev
+  && apt-get -y install build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev nano libgsl-dev libz-dev
 
 RUN mkdir -p $HOME/.R/ \ 
   && echo "CXXFLAGS=-O3 -mtune=native -march=native -Wno-unused-variable -Wno-unused-function -Wno-macro-redefined" >> $HOME/.R/Makevars \
