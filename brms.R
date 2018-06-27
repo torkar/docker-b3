@@ -13,7 +13,7 @@ library(bayesplot) # *the* package for plotting BDA output by Gabry et al.
 library(sjstats) # for ROPE analysis
 library(gridExtra) # Multiple plots in one plot
 library(pt) # prospect theory package
-library(plyr)
+library(plyr) # 
 library(ggthemes) # We want simple clean plots
 ggplot2::theme_set(theme_tufte())
 bayesplot::color_scheme_set("darkgray")
@@ -26,8 +26,8 @@ set.seed(SEED)
 options(mc.cores = parallel::detectCores())
 
 # Set the location for dataFile!
-#dataFile <- "~/Documents/cth/Research Projects, Studies & Data/Bayesian/Study III/data.csv"
-dataFile <- "/home/rstudio/data.csv"
+dataFile <- "~/Documents/cth/Research Projects, Studies & Data/Bayesian/Study III/data.csv"
+#dataFile <- "/home/rstudio/data.csv"
 d <- read.csv2(dataFile, sep=";")
 
 # In total 70 observations (each subject tried both techniques and the exp 

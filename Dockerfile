@@ -20,6 +20,8 @@ RUN mkdir -p $HOME/.R/ \
   && echo "rstan::rstan_options(auto_write = TRUE)" >> /home/rstudio/.Rprofile \
   && echo "options(mc.cores = parallel::detectCores())" >> /home/rstudio/.Rprofile
 
+RUN install2.r --error plyr
+
 RUN install2.r --error rstan 
 
 RUN install2.r --error brms
@@ -29,8 +31,6 @@ RUN install2.r --error gridExtra
 RUN install2.r --error haven
 
 RUN install2.r --error sjstats
-
-RUN install2.r --error plyr
 
 RUN install2.r --error ggthemes
 
