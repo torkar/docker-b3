@@ -734,6 +734,3 @@ PTU_tau <- comparePT(choices_tau,
 # 2   1   2 33.5 20.73 31.35 2.153
 
 ################################################################################
-# Write our the compiler settings for reproducibility
-writeLines(readLines(file.path(Sys.getenv("HOME"), ".R/Makevars")))
-# CXXFLAGS=-O3 -mtune=native -march=native -Wno-unused-variable -Wno-unused-function -Wno-macro-redefined
