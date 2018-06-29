@@ -1,2 +1,2 @@
 # docker-b3
-This is just a test
+Docker image accompanying a paper on Bayesian data analysis.
