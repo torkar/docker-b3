@@ -75,8 +75,8 @@ text(x = 3, y = 0.044, "More experienced (ME)")
 # So, not a much difference perhaps?
 ################################################################################
 #
-# Now let us create a model to test the sanity of our assumptions. Note the use 
-# of sample_prior="only", i.e., we are ignoring the likelihood at the moment.
+# Now let us create a few models to test the sanity of our assumptions. Note the 
+# use of sample_prior="only", i.e., we are ignoring the likelihood at the moment.
 m0.1 <- brm(formula = tp ~ technique + category + subject,
               data = d,
               prior = c(set_prior("normal(0,0.1)", class="Intercept"),
@@ -87,16 +87,6 @@ m0.1 <- brm(formula = tp ~ technique + category + subject,
               sample_prior = "only"
 )
 
-# If we only sample from the priors, using N(0,1), and include our four 
-# additive terms, then var, since it's log intensity, is equal to (1*4)^2 = 16.
-# Hence, we should have N(0,<<1).
-#
-# If we empirically check our hypothesis reg. priors by sampling n=100 from each 
-# posterior then max x when N(0, c(1, 0.1, 0.01)) is ~2*10^9 (with 30+ cases 
-# of overflow), ~60--200, ~5--8, respectively. 80--200 is still much higher 
-# than the max value we expect, i.e., 25, so if we use N(0,0.1) we still leave 
-# ample room for extreme values:
-
 m1 <-
   update(m0.1, prior = c(
     set_prior("normal(0,1)", class = "Intercept"),
@@ -104,7 +94,7 @@ m1 <-
     sample_prior = "only",
     refresh = 0,
     seed = SEED
-    )
+  )
 
 m0.01 <-
   update(m0.1, prior = c(
@@ -113,22 +103,36 @@ m0.01 <-
     sample_prior = "only",
     refresh = 0,
     seed = SEED
-    )
+  )
 
 # Get 100 samples from the posteriors of each model
 s1 <- posterior_predict(m1, nsamples = 100)
 s0.1 <- posterior_predict(m0.1, nsamples = 100)
 s0.01 <- posterior_predict(m0.01, nsamples = 100)
 
-#Check what the max values are
+#Check what the max values are (values are approximative)
 max(s1, na.rm = T)
+# Something like...
 # [1] 2122506522
+
 max(s0.1, na.rm = T)
+# Something like...
 # [1] 42
 
 max(s0.01, na.rm = T)
+# Something like...
 # [1] 8
 
+# If we only sample from the priors, using N(0,1), and include our four 
+# additive terms, then var, since it's log intensity, is equal to (1*4)^2 = 16.
+# Hence, we should have N(0,<<1).
+#
+# If we empirically check our hypothesis reg. priors by sampling n=100 from each 
+# posterior then max x when N(0, c(1, 0.1, 0.01)) is ~2*10^9 (with 30+ cases 
+# of overflow), ~60--200, ~5--8, respectively. 200 is still much higher 
+# than the max value we expect, i.e., 25, so if we use N(0, 0.1) we still leave 
+# ample room for extreme values:
+#
 # So in short, we will be just fine using N(0,0.1), but as we will see Stan 
 # handles wider priors w/o a problem in this case. If we would have problems
 # with divergence and chains that do not mix well we need to look into this 
