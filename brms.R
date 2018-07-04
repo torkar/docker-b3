@@ -1,5 +1,5 @@
 # MAINTAINER Richard Torkar richard.torkar@gmail.com
-# Version 1.0
+# Version 1.1
 #
 # Run this in RStudio to have plots automatically being taken care of:
 # https://www.rstudio.com
