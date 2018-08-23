@@ -8,5 +8,3 @@ Install Docker, give it plenty of RAM/CPU and then run:
 then fire up the browser and point it to: localhost:8787 and use 'rstudio' as username and the password your set above.
 
 Note: Exchange YOUR_PASSWORD to a password for you.
-
-Note: There should be two \` around pwd and then two " also. The two \` are not visible in some txt readers (like this on github), and thus in this case I've coded the backticks as code (green).
