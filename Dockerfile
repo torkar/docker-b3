@@ -10,6 +10,8 @@ COPY data.csv /home/rstudio/
 
 COPY brms.R /home/rstudio/
 
+COPY validation/ /home/rstudio/
+
 RUN apt-get update -qq \ 
   && apt-get -y install build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev nano libgsl-dev libz-dev
 

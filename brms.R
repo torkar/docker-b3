@@ -10,6 +10,7 @@
 
 library(brms) # rethinking & rstanarm are other packages one can use instead
 library(bayesplot) # *the* package for plotting BDA output by Gabry et al.
+library(ggplot2)
 library(sjstats) # for ROPE analysis
 library(gridExtra) # Multiple plots in one plot
 library(pt) # prospect theory package
@@ -27,7 +28,7 @@ options(mc.cores = parallel::detectCores())
 
 # Set the location for dataFile!
 # dataFile <- "~/Documents/cth/Research Projects, Studies & Data/Bayesian/Study III/data.csv"
-dataFile <- "/home/rstudio/data.csv"
+dataFile <- "data.csv"
 d <- read.csv2(dataFile, sep=";")
 
 # In total 70 observations (each subject tried both techniques and the exp 
