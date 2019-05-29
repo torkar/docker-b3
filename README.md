@@ -1,7 +1,7 @@
 # docker-b3
 Docker image accompanying a paper on Bayesian data analysis.
 
-Install Docker, give it plenty of RAM/CPU and then run:
+Install Docker, give it plenty of RAM/CPU and run:
 
 ```docker run -d -p 8787:8787 -v "`pwd`":/home/rstudio/working -e PASSWORD=YOUR_PASSWORD -e ROOT=TRUE torkar/docker-b3```
 
