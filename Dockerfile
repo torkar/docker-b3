@@ -42,6 +42,12 @@ RUN install2.r --error devtools
 
 RUN R -e "devtools::install_github('stan-dev/bayesplot')"
 
+RUN R -e "devtools::install_github('rmcelreath/rethinking',ref='Experimental')"
+
+RUN install2.r --error tidyr
+
+RUN install2.r --error readxl
+
 RUN rm /home/rstudio/pt_1.1.tar.gz
 
 RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
