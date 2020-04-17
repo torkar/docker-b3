@@ -1,0 +1,829 @@
+# Note: This was automatically generated from the RMarkdown file, 
+#       so the content is the same
+#' 
+#' # Setup {#setup}
+#' 
+#' ## Packages and functions
+#' 
+#' The code below simply cleans your environment to avoid loading unnecessary functions or variables and loads the libraries used in our script. We begin by installing and loading the required packages. For BDA, we use mainly @R-brms, whereas @R-bayesplot and @R-bayestestR provide support with various plots and functions to calculate credible intervals.
+#' 
+## ---- message=FALSE, warning=FALSE------------------------------------------------------
+rm( list = ls() )  # Cleans the environment.
+
+# You can install packages in case they are not installed already.
+# install.packages( c("tidyverse", "likert", "gridExtra", "kableExtra",
+#                     "brms", "bayesplot", "bayestestR") 
+# The CPT package is installed from source.
+# install.packages("pt_1.1.tar.gz", repos=NULL, type="source")
+
+library(tidyverse) # For transforming and visualizing data.
+library(gridExtra) # Combining many plots into the same figure.
+library(kableExtra)# Rendering tables to look nicer.
+
+library(brms)      # BDA packages. Alternatively, one can use rethinking & rstanarm.
+library(bayesplot) # Plotting BDA output by Gabry et al.
+library(bayestestR)# Get the HDI values
+bayesplot::color_scheme_set("viridis") #Uses the viridis palette on bayesplots.
+
+library(pt)        # The Cumulative Prospect Theory (CPT) package.
+library(likert)    # Manipulates and plot data on likert scales.
+library(readxl)    # Reads data from Excel files
+
+#' 
+#' For reproducibility and efficiency we set an arbitrary seed and the number of cores to speed up the MCMC sampling.
+#' 
+## ---- message=FALSE, warning=FALSE------------------------------------------------------
+SEED <- 61215
+set.seed(SEED)
+options(mc.cores = parallel::detectCores())
+
+#' 
+#' Finally, we created many utils functions used throughout this document to simplify our code and improve readiability/reuse. The code for all utils functions are presented in the Appendix (Section \@ref(appendix)).
+#' 
+## ---- utils, echo=FALSE, message=FALSE--------------------------------------------------
+# This is a constant with our desired theme used in all plots.
+PLOT_THEME <- theme_minimal(base_size = 10) + 
+        theme(plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+        panel.grid.minor = element_blank(), panel.grid = element_line(size=0.3),
+        axis.line = element_line(size = 1), axis.ticks = element_line(size = 1),
+        strip.background = element_rect(colour = "white", fill = "aliceblue"),
+        legend.position = "bottom")
+
+# Extracts and plots the priors sampling when running the models.
+prior_analysis <- function(model, chosen_parameters = NULL){
+  #Sampling is done in a log scale, we must then invert back to the outcome scale.
+  long_df <- posterior_samples(model) %>% inv_logit_scaled()
+  
+  #Plot only few parameters in case the model has too many.
+  if(!is.null(chosen_parameters)){
+    long_df <- long_df %>%  select(chosen_parameters)
+  }
+  
+  long_df <- long_df %>% gather(key = "Parameter", value = "Value")
+  mean_values <- long_df %>% group_by(Parameter) %>% summarise("Mean" = mean(Value))
+  
+  ggplot(long_df, aes(x=Value, fill = Parameter)) + geom_density(color = "black") +
+    geom_vline(mean_values, mapping = aes(xintercept = Mean), 
+               linetype = "dashed", size = 1, color = "gray37") +
+    scale_fill_viridis_d() + labs(x="Sampled values", y="Density", fill="Parameters: ") +
+    facet_wrap(~Parameter, nrow=2, scales = "free") + 
+    PLOT_THEME + theme(legend.position = "None")
+}
+
+# Funtion to plot HDI of the posterior (wrapper around mcmc_areas function)
+plot_posterior_region <- function(posterior, model_var, y_labels,
+                                  ci_width = 0.94){
+  region_plot <- mcmc_areas(posterior, pars = c(model_var), prob = ci_width) +
+    geom_vline(xintercept = 0, linetype = "dashed") + 
+    scale_y_discrete( labels = y_labels) + labs(x = "Sampled values") + PLOT_THEME
+  return(region_plot)
+}
+
+# Utility function to convert predictions for different levels 
+# into individual levels, to comapre marginal effects.
+get_individual_levels <- function(all_predictions){
+  #1. Turn it into a long table and then separate the combined levels into two columns
+  long_df_pred <- all_predictions %>% 
+    gather(key = "CombinedLevels", value = "tp") %>%
+    separate("CombinedLevels", into = c("Experience","Technique"), sep = "_") %>% 
+    mutate_at(.vars = c("Technique","Experience"),.funs = factor)
+  long_df_pred
+  
+  #2. Filter the fault values per individual level
+  faults_me <- long_df_pred %>% filter(Experience == "ME" ) %>% select("ME" = tp)
+  faults_le <- long_df_pred %>% filter(Experience == "LE" ) %>% select("LE" = tp)
+  faults_et <- long_df_pred %>% filter(Technique  == "ET" ) %>% select("ET" = tp)
+  faults_tct<- long_df_pred %>% filter(Technique  == "TCT") %>% select("TCT"= tp)
+  
+  #3. Merges each column into a single data frame.
+  individual_levels <- bind_cols(faults_me, faults_le, faults_et, faults_tct)
+  return(individual_levels)
+}
+
+# Utility function to plot our choice problem. 
+# Its simply a wrapper around the function provided by the pt package.
+plot_choice_problem <- function(choice_problem, chosen_labels, filename = NULL){
+  drawChoices(choice_problem,
+              decision_square_x=0.2, decision_square_edge_length=0.1,
+              circle_radius=0.05   , y_split_gap=0.1, x_split_offset=0.03,
+              probability_text_digits=3, y_probability_text_offset=0.015,
+              y_value_text_offset=0.005, x_value_text_offset=0.025,
+              probability_text_font_colour="black", probability_text_font_size=11,
+              objective_consequence_text_font_colour="black",
+              objective_consequence_text_font_size=11,
+              label=chosen_labels,
+              label_font_colour=c("black","black", "black"),
+              label_font_size=c(11,11,18),
+              label_positions=list(c(0.380,0.65),c(0.380,0.35),c(0.2,0.5)))
+}
+
+# Creates customised diverging plots from a likert object.
+create_diverging_plot <- function(likert_results, answer_texts, title = ""){
+  divergin_plot <- plot(likert_results) + ggtitle(title) + 
+    scale_fill_viridis_d(drop = F, name = "Answers: ", labels = answer_texts) +
+    PLOT_THEME + theme(legend.position = "top")
+  return(divergin_plot)
+}
+
+#' 
+#' ## Overview of the dataset {#data-overview .tabset .tabset-fade .tabset-pills}
+#' 
+#' We begin by loading and exploring our dataset. The data reveals the number of faults (i.e., true positives, or `tp`) revealed by `subjects` with different levels of `experience` using two distinct testing `techniques`. We consider the following levels:
+#' 
+#' * **ME:** More experienced tester.
+#' * **LE:** Less experienced tester.
+#' * **ET:** Exploratory tesitng.
+#' * **TCT:** Test case based testing.
+#' 
+## ---- dataset-loading-------------------------------------------------------------------
+# If you intend to run the script yourself, remember to check the file path is correct.
+# setwd(mydirectory) <-- change this to point to the folder where you unzipped the package
+raw_data <- read.csv2("./datasets/experiment_data.csv", sep=";")
+
+#' 
+#' ### Descriptive statistics
+#' 
+## ---- dataset-statistics, echo=FALSE----------------------------------------------------
+# Plot descriptive statistics about the dataset.
+data_summary <- raw_data %>%  group_by(technique,experience) %>%  
+  summarise(Mean = round(mean(tp),2), Median = round(median(tp),2),SD = round(sd(tp),2))
+
+data_summary
+
+#' 
+#' ### Distributions (density plots)
+#' 
+#' Note that there does not seem to be a significant difference in the number of faults revealed when comparing less (LE) and more experience (ME) subjects. Conversely, that difference is more apparent when comparing ET and TCT.
+#' 
+## ---- dataset-density, out.width="80%", fig.align="center", echo=FALSE------------------
+dens_plot_tech <- ggplot(raw_data, aes(x = tp, fill = technique)) +
+  geom_density(alpha = 0.7) + scale_fill_viridis_d() + 
+  facet_wrap(~technique, nrow = 2) + PLOT_THEME + theme(legend.position = "None")
+
+dens_plot_exp <- ggplot(raw_data, aes(x = tp, fill = experience)) +
+  geom_density(alpha = 0.7) + scale_fill_viridis_d(begin=0.25, end = 0.75) +
+  facet_wrap(~experience, nrow = 2) + PLOT_THEME + theme(legend.position = "None")
+grid.arrange(dens_plot_exp, dens_plot_tech, ncol = 2)
+
+#' 
+#' ### Raw data
+#' 
+## ---- dataset-raw, echo=FALSE-----------------------------------------------------------
+raw_data
+
+#' 
+#' ***
+#' 
+#' # BDA workflow {#bda}
+#' 
+#' ## Creating the model {#bda-create .tabset .tabset-fade .tabset-pills}
+#' 
+#' Similar to the original study, we want to answer: 
+#' 
+#' * Is there a technique that reveals more faults between ET and TCT?
+#' * Is there a difference between less and more experienced subjects?
+#' 
+#' Therefore, we are interested in `tp` as an outcome by looking at three predictors: `technique`, `experience` and `subject`. Moreover, there could also be confounding variables leading to interaction effects. We define the two models below to predict `tp` by building a generalised linear model (GLM) based on our three predictors but with different likelihood and parameters.
+#' 
+#' ### Defining M1 {-}
+#' 
+#' $M_1$ assumes that `tp` follows a **Poisson distribution** with a rate of fault detection $\lambda$ and that both `èxperience` and `technique` have an effect on the rate of fault detection. Since we do not have prior information, we set the weakly informed prior $N(0, 1.5)$ for all parameters. Next, we present both the mathematical notation and the corresponding code for $M_1$.
+#' 
+#' $$
+#' \begin{split}
+#'     \mathcal{M}_1: \mathrm{tp} &\thicksim \mathrm{Poisson(\lambda)} \\
+#'     \mathrm{log(\lambda)} &= \alpha + \beta_t \times \mathrm{tech} + \beta_e \times \mathrm{exper}\\
+#'     \alpha, \beta_t,\beta_e &\thicksim \mathrm{Normal(0,1.5)} \\
+#' \end{split}
+#' $$
+#' 
+## ---- bda-create-m1, warning=FALSE, message=FALSE, cache=TRUE---------------------------
+m1 <-brm(formula = tp ~ technique + experience + subject,
+         data = raw_data,
+         prior= c(set_prior("normal(0,1.5)", class = "Intercept"),
+                  set_prior("normal(0,1.5)", class = "b")),
+         family = poisson(link=log), 
+         chains = 4, refresh = 0, seed = SEED, sample_prior = "yes")
+
+#' 
+#' ***
+#' 
+#' ### Defining M2 {-}
+#' 
+#' $M_2$ also assumes a Poisson distribution, but accounts for the unusual large amount of zero values in the data (`tp = 0`). Note that in 13 out of 70 observations (20%) in our dataset revealed no faults. Therefore, we choose a Zero-inflated Poisson likelihood with the rate of fault detection ($\lambda$) and the probability $p_i$ of finding no faults. We also consider varying intercepts for the subjects, i.e., we expect that no
+#' matter where, how, or how many participants we use, we would still have the same levels in `technique`and `experience`.
+#' 
+#' $$
+#' \begin{split}
+#'     \mathcal{M}_2: \mathrm{tp} \thicksim &\ \mathrm{ZIPoisson}(p_i, \lambda) \\
+#'     \log(\lambda) = &\ \alpha + \beta_t \times \mathrm{tech} + \beta_e \times \mathrm{exper}+ \alpha_{subject[i]}\\
+#'     \mathrm{logit}(p_i) =&\ \alpha_p + \beta_p \times \mathrm{tech} \\
+#'     \alpha_{subject[i]} \thicksim&\ \mathrm{Normal(\mu_s,\sigma_s)} \\
+#'     \alpha, \alpha_p, \beta_p, \beta_t, \beta_e, \mu_s \thicksim &\ \mathrm{Normal(0,1.5)} \\
+#'     \sigma_s \thicksim &\ \mathrm{HalfCauchy(0,1)} \\
+#' \end{split} 
+#' $$
+#' 
+#' Similarly to $M_1$, $M_2$ has `technique` and `experience` as predictors of `tp`. However, $M_2$ has varying intercepts for each subect in `(1 | subject)` and use a different likelihood, namely, `zero_inflated_poisson`. The varying intercepts also need a prior, and here we use a `cauchy(0,1)` since variances only take positive values.
+#' 
+## ---- bda-create-m2, warning=FALSE, message=FALSE, cache=TRUE---------------------------
+m2 <- brm(bf(formula = tp ~ 1 + technique + experience + (1 | subject), zi ~ technique),
+          data = raw_data,
+          prior = c(set_prior("normal(0,1.5)", class="b"),
+                    set_prior("normal(0,1.5)", class="Intercept", dpar="zi"),
+                    set_prior("cauchy(0,1)", class="sd")),
+          family = zero_inflated_poisson(link=log),
+          chains = 4, refresh = 0, seed = SEED, sample_prior = "yes")
+
+#' 
+#' ## Sensitivity analysis {#bda-priors}
+#' 
+#' After compiling and sampling the models, we can check wheter our priors look sane. So, we sample from the models above, but using the option `sample_prior = "only"`.
+#' 
+#' ### Prior analysis for M1 {.tabset .tabset-fade .tabset-pills}
+#' 
+## ---- bda-priors-m1, cache = TRUE, message=FALSE----------------------------------------
+# Same as m1, but we change to only sample priors.
+m1_priors <- brm(formula = tp ~ technique + experience + subject, data = raw_data,
+         prior = c(set_prior("normal(0,1.5)", class = "Intercept"),
+                   set_prior("normal(0,1.5)", class = "b")),
+         family = poisson(link=log),
+         chains = 4, refresh = 0, seed = SEED,
+         sample_prior = "only")
+
+#' 
+#' $M1$ has a very high variance in the Intercept $[-53.44, 52.80]$, which is inconsistent to the variance of the other population-level effects (see the sampled priors summary). This is an indication that we should use varying intercepts for the subjects, which is already covered by $M2$.
+#' 
+#' #### M1 - Prior summary {-}
+## ---- echo = FALSE----------------------------------------------------------------------
+m1_priors
+
+#' 
+#' #### M1 - Prior distributions {-}
+## ---- echo=FALSE, message=FALSE---------------------------------------------------------
+prior_analysis(m1_priors, c("b_experienceME", "b_Intercept", 
+                            "b_techniqueTCT", "b_subject"))
+
+#' 
+#' ### Prior Analysis for M2 {.tabset .tabset-fade .tabset-pills}
+#' 
+## ---- bda-priors-m2, cache = TRUE, warning=FALSE, message=FALSE-------------------------
+m2_priors <- brm(bf(formula = tp ~ 1 + technique + experience + (1 | subject), 
+                    zi ~ technique),
+          data = raw_data,
+          prior = c(set_prior("normal(0,1.5)", class="b"),
+                    set_prior("normal(0,1.5)", class="Intercept", dpar="zi"),
+                    set_prior("normal(0,1.5)", class="b", dpar="zi"),
+                    set_prior("cauchy(0,1)", class="sd")),
+          family = zero_inflated_poisson(link=log),
+          chains = 4, refresh = 0, seed = SEED, sample_prior = "only")
+
+#' 
+#' Similarly to the sensitivity analysis in M1, there is a high variance in the Intercept $[-31.23, 32.38]$, however, that is being captured as a group-level effects, as opposed to a population-level effect (see `~subject` Group-level Effects in sampled priors summary).
+#' 
+#' #### M2 - Priors summary {-}
+## ---- bda-priors-m2-table, echo=FALSE---------------------------------------------------
+m2_priors
+
+#' 
+#' #### M2 - Priors distribution {-}
+## ---- bda-priors-m2-figure, echo=FALSE, message=FALSE-----------------------------------
+prior_analysis(m2_priors, c("b_experienceME", "b_Intercept", "b_techniqueTCT",
+                      "b_zi_Intercept", "b_zi_techniqueTCT", "sd_subject__Intercept"))
+
+#' 
+#' ### Checking our posterior {.tabset .tabset-fade .tabset-pills}
+#' 
+#' In order to evaluate the predictions performed by our model, we must verify that:
+#' 
+#' * $\hat{R}$<1.01 and therefore our posterior distribution is not biased.
+#' * Our effective sample size (Eff. Size) should not be less than 10--20\% of the total sample size ($4,000$ sampled values). Otherwise, we would have auto-correlation within the chains that sample the posterior values.
+#' * We have *hairy caterpillar* when plotting the traces of our chains. This indicates that the chains have mixed well.
+#' 
+#' ***
+#' 
+#' #### M1 - Posterior Summary {-}
+#' 
+#' The summary indicates good results both for $\hat{R}$ and effective sample size.
+#' 
+## ---- bda-diag-m1-summary---------------------------------------------------------------
+m1
+
+#' 
+#' #### M1 - Trace plots {-}
+#' 
+#' The trace plots look like hairy caterpillars, indicating that the chains have mixed well.
+#' 
+## ---- bda-diag-m1-traces----------------------------------------------------------------
+chosen_parameters <- c("b_Intercept", "b_techniqueTCT", "b_experienceME", "b_subject")
+mcmc_trace(m1, pars = chosen_parameters) + PLOT_THEME + theme(legend.position = "None")
+
+#' 
+#' #### M2 - Posterior summary {-}
+#' 
+#' The summary indicates good results both for $\hat{R}$ and effective sample size. Note that the subjects are now a group-level effect, instead of a population-level effect.
+#' 
+## ---- bda-diag-m2-summary---------------------------------------------------------------
+m2
+
+#' 
+#' #### M2 - Trace plots {-}
+#' 
+#' The trace plots look like hairy caterpillars, indicating that the chains have mixed well.
+#' 
+## ---- , bda-diag-m2-traces--------------------------------------------------------------
+chosen_parameters <- c("b_Intercept", "b_techniqueTCT", "b_experienceME",
+                       "sd_subject__Intercept", "b_zi_Intercept", "b_zi_techniqueTCT")
+mcmc_trace(m2, pars = chosen_parameters) + PLOT_THEME + theme(legend.position = "None")
+
+#' 
+#' ### {-}
+#' 
+#' ***
+#' 
+#' We use the function `ppc_dens_overlay` to plot how our *predictions fit the actual data.* Note that $M2$ has a better fit, specially when closer to zero `tp`, indicating that the a zero-inflated poisson is a better choice for likelihood.
+#' 
+## ---------------------------------------------------------------------------------------
+custom_sample = 50 # We predict 50 values.
+fit_m1 <- ppc_dens_overlay(yrep = posterior_predict(m1, nsamples = custom_sample),
+                           y    = raw_data$tp)
+
+fit_m2 <- ppc_dens_overlay(yrep = posterior_predict(m2, nsamples = custom_sample),
+                           y    = raw_data$tp)
+
+#' 
+## ---- bda-diagn-fit, echo=FALSE, fig.cap="Fit of our predictions using M1 and M2", fig.align="center", out.width="90%"----
+# Format the plots above to our theme and same scale for better comparison.
+fit_m1 <- fit_m1 + labs(y="Density", x = "Number of Faults (tp)", title = "M1") +
+    scale_y_continuous(limits = c(0,0.15), breaks = seq(0,0.15,by=0.05)) + 
+    scale_x_continuous(limits = c(0,35), breaks = seq(0,30, by=5)) + PLOT_THEME
+
+fit_m2 <- fit_m2 + labs(y="Density", x = "Number of Faults (tp)", title = "M2") +
+    scale_y_continuous(limits = c(0,0.15), breaks = seq(0,0.15,by=0.05)) + 
+    scale_x_continuous(limits = c(0,35), breaks = seq(0,30, by=5)) + PLOT_THEME
+
+grid.arrange(fit_m1,fit_m2, ncol=2, nrow = 1)
+
+#' 
+#' ***
+#' 
+#' **In conclusion**, $M2$ fits our data better (Figure \@ref{fig:bda-diag-fit}) and captures group-level variance. It would be risky to use $M1$ with its high variance of $\alpha$ modelled as a population-level effect (Section \@ref{bda-priors}). Therefore, **we continue our analysis only with $M2$**.
+#' 
+#' ## Conducting inference {#bdainfer .tabset .tabset-fade .tabset-pills}
+#' 
+#' After checking that our model is sane, we can start using the posterior distribution to make predictions of the number of faults revealed by each technique and different levels of experience. The steps are: 1) get the posterior distribution, 2) define the levels to predict, 3) run the model with the posterior values to get our outcome `tp`.
+#' 
+## ---- bda-infer-------------------------------------------------------------------------
+# 1- Getting a posterior distribution
+#    Gets the posterior distribution from the model. Those are values for the
+#    parameters. This is what brms uses to do predictions of number of faults (tp)
+posterior_dist <- posterior_samples(m2)
+
+# 2- Defining which predictors (levels) to use.
+#    Defines the levels that we are interested in sampling. In our case, all
+#    combinations of experiences and techniques (ET x LE, ET x ME, TCT x LE, TCT x ME).
+predictions_df <- data.frame(technique =c("ET", "ET", "TCT", "TCT"),
+                             experience=c("LE", "ME", "LE" , "ME"))
+
+# 3- Run the model
+#    Push our posterior through the model using the specified 
+#    levels to obtain the outcome variable.
+levels_pred_df <- fitted(m2, newdata = predictions_df,re_formula=NA,summary=FALSE) 
+
+# Rounds tp values, covert it to DF and then rename columns
+levels_pred_df <- levels_pred_df %>% round %>% as.data.frame
+colnames(levels_pred_df)<- c("LE_ET","ME_ET","LE_TCT","ME_TCT")
+
+# Do some data wrangling to convert the combined levels to "per-level" predictions.
+# We will use this to plot marginal effects of each level.
+marginal_pred_df <- get_individual_levels(levels_pred_df)
+
+#' 
+#' ### Raw posterior distribution {-}
+#' 
+## ---- bda-infer-posterior---------------------------------------------------------------
+posterior_dist
+
+#' 
+#' ### Predictions (combined levels) {-}
+#' 
+## ---------------------------------------------------------------------------------------
+levels_pred_df
+
+#' 
+#' ### Predictions (individual levels) {-}
+#' 
+## ---------------------------------------------------------------------------------------
+marginal_pred_df
+
+#' 
+#' ## {- .tabset .tabset-fade .tabset-pills}
+#' 
+#' We can see the marginal effect of each factor by looking at how much of our posterior overlaps zero. In other words, we want to see which predictors have a positive or negative effective in the desired variable, as opposed to no effect. This can be easily done by using the function `mcmc_areas` from the `bayesplot` package. 
+#' 
+#' Since the posterior is a distribution, we look at the **HDI** (high density interval), which shows the points that cover most of the distribution. In our case, we specify an HDI (also referred to as credible interval--CI) of 94% shown as the highlighted area.
+#' 
+#' Below, we see that the Technique variable has a negative effect, meaning one of the factors (in this case TCT, since the posterior samples from `TCT`) actually reduces the number of faults. The interesting case here is the Experience variable because it is *very close* to zero. This indicates that the effect of experience in revealing number of faults can be very small, almost non-significant.
+#' 
+#' In the original study, authors concluded that experience has no significant effect in detecting faults. Our BDA analysis shows indeed that the effect is very small, but the conclusions are more nuanced, since the majority of the posterior is still on the positive scale (particularly, for more experienced testers).
+#' 
+## ---- bda-infer-regions, fig.align="center", out.width="80%", fig.caption = "Areas of the 94% HDI of our posteriors.", message=FALSE----
+plot_posterior_region(m2, c("b_techniqueTCT", "b_experienceME"), 
+                      c("Technique", "Experience"))
+
+#' 
+#' We can also visually compare the predictors by plotting our predictions. Below we show descriptive statistics, as well as the number of faults for a *94% credible interval* for each level (combined and marginal). **Note that** we will use these values later (CI-low, Median, CI-high) in our CPT framework to support decision making.
+#' 
+## ---------------------------------------------------------------------------------------
+marginal_summary <- marginal_pred_df %>% gather(key="Predictors", value="Faults") %>%
+  group_by(Predictors) %>% 
+  summarise(Median = median(Faults), Mean = mean(Faults), SD = sd(Faults))
+
+levels_summary   <- levels_pred_df %>% gather(key="Predictors", value="Faults") %>%
+  group_by(Predictors) %>% 
+  summarise(Median = median(Faults), Mean = mean(Faults), SD = sd(Faults))
+
+hdi_levels     <- hdi(levels_pred_df, ci = 0.94)
+hdi_marginal   <- hdi(marginal_pred_df, ci = 0.94)
+hdi_predictions<- bind_rows(hdi_marginal, hdi_levels)%>%rename("Predictors" = Parameter)
+
+full_summary <- bind_rows(marginal_summary, levels_summary)
+full_summary <- left_join(hdi_predictions, full_summary, by="Predictors")
+
+#' 
+#' ### Effects (summary table) {-}
+#' 
+## ---- bda-hdi, echo=FALSE---------------------------------------------------------------
+full_summary
+
+#' 
+#' ### Effects (boxplots) {-}
+#' 
+## ---- bda-effects-plot, out.width="90%", fig.align="center", echo=FALSE-----------------
+# Plotting marginal effects
+marg_long_data <- marginal_pred_df %>% gather(key="Predictors", value="Faults")
+marg_plot <- ggplot(marg_long_data,aes(x =Predictors, y = Faults, fill = Predictors)) +
+  scale_fill_viridis_d(begin=0, end = 0.5) +
+  scale_y_continuous(limits = c(0,20), breaks = seq(0,20,by=4)) +
+  geom_boxplot() + PLOT_THEME + theme(legend.position = "None")
+
+# Plotting the effects of combined levels (e.g., ET + ME)
+comb_long_data <- levels_pred_df %>% gather(key="Predictors", value="Faults")
+comb_plot <- ggplot(comb_long_data,aes(x =Predictors, y = Faults, fill = Predictors)) +
+  scale_fill_viridis_d(begin=0.625, end = 1.0) +
+  scale_y_continuous(limits = c(0,20), breaks = seq(0,20,by=4)) +
+  geom_boxplot() + PLOT_THEME + theme(legend.position = "None")
+
+grid.arrange(marg_plot, comb_plot, ncol = 2, nrow = 1)
+
+#' 
+#' Our analysis of the predictions reveal that:
+#' 
+#' * The choice of technique has a high effect on the number of faults, such that ET can reveals more faults than TCT  (e.g., a median of 10 more faults).
+#' * Practitioner's experience has very little effect overall, but more experienced practitioners tend to reveal slightly more faults. However, less experienced participants using ET performed better than more experience participants using TCT (LE_ET >>> ME_TCT).
+#' * Those differences are still in terms of few faults. For instance, the higher median is 11 faults, and many vary in only in one or two more faults. So, the cost of fixing those faults will likely be a more determining factor for adoption.
+#' 
+#' *In conclusion*, ET should be used over TCT and experience can have an effect depending on the cost of the fault. In comparison to the original experience, BDA seemed to enable more nuanced analysis because it is based on distributions as opposed to estimates such as $p$-values. For instance, results from experience are not "clearly" significant or non-significant, rather they will depend on context information, such as costs of fixing the faults, or salaries of more experienced developers.
+#' 
+#' ***
+#' 
+#' # Applying CPT {#cpt}
+#' 
+#' We use the @R-pt package for calculations of prospects and utility. Therefore, we start by defining the following choice problems:
+#' 
+#' * **CP1:** Should a manager adopt ET or TCT?
+#' * **CP2:** Should a manager hire more (ME) or less experienced (LE) testers?
+#' * **CP3:** After chosing the best technique, should she hire more (ME) or less experienced (LE) testers?
+#' 
+#' Since the original paper does not include context information about the costs of fixing a fault, or salaries of engineers, we will assume that a technique that detects more faults should compensate the costs of bug fixing after release, i.e., testers can fix them when they are reported later:
+#' 
+#' $$
+#' \begin{split}
+#'     \nu(x_i) = (\texttt{tp} \times \texttt{fault-cost}) - (\mathrm{\texttt{hours-per-session}} \times \mathrm{\texttt{hourly-salary}})
+#' \end{split}
+#' $$
+#' 
+#' Here, we consider a regular and a critical scenario for `fault-cost`, in addition to fixed values for the hourly salaries.
+#' 
+#' | **Description**                                  | **Variables**      | **Values** |
+#' |:-------------------------------------------------|:-------------------|-----------:|
+#' | Cost of a regular fault                          | `fault-cost`       |     $150   |
+#' | Cost of a critical fault                         | `fault-cost`       |     $1000  |
+#' | Cost of debugging with a less experienced tester | `hourly-salary`    |     $100   |
+#' | Cost of debugging with a more experienced tester | `hourly-salary`    |     $200   |
+#' | Duration of a debugging session                  | `hours-per-session`|     4      |
+#' 
+## ---- cpt-utils-------------------------------------------------------------------------
+#--------------------------------------------------------------------
+# Setting values and functions for our context.
+#--------------------------------------------------------------------
+
+# This is the function that calculates the costs of a fault: v(xi)
+# It is used to get the subjective value of a prospect (v(xi)).
+FAULT_COST <- 150
+
+SAL_LE <- 100 # $100/h hourly salary for LE
+SAL_ME <- 200 # $200/h hourly salary for ME
+SESSION_TIME  <- 4 # Num hours of work in a session: 4h
+ME_STR <- "ME"
+LE_STR <- "LE"
+ET_STR <- "ET"
+TCT_STR<- "TCT"
+
+get_vi_cost <- function(tp, session_costs){
+  total_fault_cost <- (tp * FAULT_COST) - session_costs
+}
+
+#' 
+#' We begin by loading the package and configuring our variables. After defining the variables and equations above, we model our choice problem in terms of three possible outcomes for each level. The outcomes are:
+#' 
+#' 1. **3% probability** of *doing better than expected* and revealing more faults.
+#' 2. **94% probability** of revealing the *expected* number of faults (median).
+#' 3. **3% probability** of *doing worse than expected* and revealing few faults.
+#' 
+#' Note that those values are connected to our choice of HDI (94% credible interval) from Table \@ref(tab:bda-hdi). If the outcomes are based on other probability values, then the HDI should be calculated again with the new values.
+#' 
+## ---- cpt-setup-------------------------------------------------------------------------
+#--------------------------------------------------------------------
+# Configuring framework for pt package labels for both choice problems
+#--------------------------------------------------------------------
+
+# For each choice, we consider three cases, in connection to our HDI (3%, 94%, 3%).
+probability_strings <- c("0.03", "0.94", "0.03", 
+                         "0.03", "0.94", "0.03")
+
+choice_ids <- c(1,1,1, 1,1,1) # Since we consider 2 levels x 3 cases, we have 6 choices.
+gamble_ids <- c(1,1,1, 2,2,2) # Our choices are divided into two branches (e.g. MEvsLE),
+outcome_ids<- c(1,2,3, 1,2,3) # and we have three distinct outcomes in each branch,
+
+#--------------------------------------------------------------------
+# This is simply a utility function that retrieves tp values from our HDI
+#--------------------------------------------------------------------
+get_fault_values <- function(summary_df, level){
+  level_row <- summary_df %>% filter(Predictors == level)
+  value_high_pred<- round(level_row[1,"CI_high"] + 1)
+  value_med_pred <- round(level_row[1, "Median"]    )    
+  value_low_pred <- round(level_row[1, "CI_low"] - 1)
+
+  faults_from_level <- c(value_high_pred, value_med_pred, value_low_pred)
+  return(faults_from_level)
+}
+
+#' 
+#' ## CP1 - ET vs. TCT
+#' 
+#' In order to calculate the cost of using each technique *independently* of the participant's experience, we use an estimated cost based on our dataset. We had a total of 35 participants (23 LE and 12 ME) using both techniques, hence we average the cost of their bug fixing session.
+#' 
+## ---- cpt-cp1, fig.cap="Each level has three options showing, respectively, the best (top), median and worse (low) case. ET has better profit than TCT in all cases.", out.width="80%", fig.align="center"----
+#--------------------------------------------------------------------
+# objective consequences for the *different techniques* - CP1
+#--------------------------------------------------------------------
+LE_SUB <- 23
+ME_SUB <- 12
+avg_cost_session <- ((LE_SUB * SAL_LE) + (ME_SUB * SAL_ME) ) / (LE_SUB + ME_SUB)
+avg_cost_session <- round(avg_cost_session,2)
+
+et_outcomes <- get_vi_cost(get_fault_values(full_summary, ET_STR) , avg_cost_session)
+tct_outcomes<- get_vi_cost(get_fault_values(full_summary, TCT_STR), avg_cost_session)
+
+techniques_consequences <- c(et_outcomes, tct_outcomes)
+
+# Let's put everything together in a Choices object.
+choices_techniques <- Choices(choice_ids = choice_ids, gamble_ids = gamble_ids,
+                              outcome_ids= outcome_ids,
+                              objective_consequences = techniques_consequences,
+                              probability_strings = probability_strings)
+
+# Plot the decision problem for the CP1.
+plot_choice_problem(choices_techniques, c(ET_STR, TCT_STR, "T"))
+
+#' 
+#' From the figure above, note that ET yields significantly more profits in all outcomes, whereas TCT can actually lead to losses in a pessimistic case (TCT:3 = -\$134.29). So, assuming our context, **ET should be chosen**.
+#' 
+#' ## CP2 - ME vs. LE
+#' 
+#' Here, we consider the impact of experiences indepently of which technique is being used.
+#' 
+## ---- cpt-cp2, fig.cap="Profits and losses for the best (top), median and worse (low) cases in each choice. The outcomes related to ME lead to losses, whereas ME results in profit.", out.width="80%", fig.align="center"----
+#--------------------------------------------------------------------
+# Objective consequences for the *levels of experience* - CP2
+#--------------------------------------------------------------------
+me_outcomes <- get_vi_cost(get_fault_values(full_summary, ME_STR), 
+                           SESSION_TIME * SAL_ME)
+le_outcomes <- get_vi_cost(get_fault_values(full_summary, LE_STR), 
+                           SESSION_TIME * SAL_LE)
+
+experience_consequences <- c(me_outcomes, le_outcomes)
+
+# Let's put everything together in a Choices object.
+choices_experience <- Choices(choice_ids = choice_ids, gamble_ids = gamble_ids,
+                              outcome_ids= outcome_ids,
+                              objective_consequences = experience_consequences,
+                              probability_strings = probability_strings)
+
+#Plot the decision problem for the CP2.
+plot_choice_problem(choices_experience, c(ME_STR, LE_STR, "E"))
+
+#' 
+#' From the figure above, note that it is more profitable, on average, to hire less experienced testers (LE:94 = \$200) since more experienced testers lead to an average loss (ME:94 = -\$200). Even though they have a 3% optimistic chance of yielding high profits (ME:3 = \$1000), the difference is very small for the corresponding case with less experienced testers (LE:3 = \$950).
+#' 
+#' ## CP3 - ET + (ME vs. LE)
+#' 
+#' Restuls from CP1 shows that ET is significantly more profitable than TCT, whereas CP2 shows that the experience has no significant impact on the number of revealed faults. The follow-up question is whether the experience is a relevant factor when combined with ET.
+#' 
+## ---- cpt-cp3-regular, fig.cap="Outcomes for choosing ET with the different experiences and regular cost of fixing faults.", out.width="80%", fig.align="center"----
+#--------------------------------------------------------------------
+# Objective consequences for experienve GIVEN that we choose ET - CP3
+#--------------------------------------------------------------------
+
+et_me_outcomes<-get_vi_cost(get_fault_values(full_summary,"ME_ET"),
+                            SESSION_TIME * SAL_ME)
+et_le_outcomes<-get_vi_cost(get_fault_values(full_summary,"LE_ET"),
+                            SESSION_TIME * SAL_LE)
+
+tech_and_exp_consequences <- c(et_me_outcomes, et_le_outcomes)
+
+choices_tech_and_exp_regular<-Choices(choice_ids=choice_ids, gamble_ids=gamble_ids,
+                                      outcome_ids=outcome_ids,
+                                      objective_consequences=tech_and_exp_consequences,
+                                      probability_strings=probability_strings)
+
+plot_choice_problem(choices_tech_and_exp_regular, c(ME_STR, LE_STR, "E & T"))
+
+#' 
+#' Based on Figure \@ref(fig:cpt-cp3-regular), and similarly to our choice problems on CP2, the levels of experience does not seem to differ significantly in prospects. However, other factors can influence this decisions, such as recruitment costs, etc. 
+#' 
+#' For instance, the costs of a fault can significantly change this scenario. In Figure \@ref(fig:cpt-cp3-critical), we calculate prospects in a hypothetical critical scenario where the cost of a fault is much higher (e.g., \$1000). As a consequence, hiring more experienced testers becomes more profitable and compensates their higher salaries.
+#' 
+## ---- cpt-cp3-critical, fig.cap="Differences in the experience when considering the costs of critical faults.", out.width="80%", fig.align="center"----
+# New hypothetical cost of a fault in, e.g., testing a critical system.
+CRIT_FAULT_COST <- 1000
+
+get_vi_cost_critical <- function(tp, session_costs){
+  total_fault_cost <- (tp * CRIT_FAULT_COST) - session_costs
+}
+
+#--------------------------------------------------------------------
+# Same steps as before, but using the critical fault cost value.
+#--------------------------------------------------------------------
+et_me_outcomes<-get_vi_cost_critical(get_fault_values(full_summary,"ME_ET"),
+                                     SESSION_TIME * SAL_ME)
+et_le_outcomes<-get_vi_cost_critical(get_fault_values(full_summary,"LE_ET"),
+                                     SESSION_TIME * SAL_LE)
+
+tech_and_exp_consequences <- c(et_me_outcomes, et_le_outcomes)
+
+choices_critical_faults <-Choices(choice_ids=choice_ids, gamble_ids=gamble_ids,
+                                  outcome_ids=outcome_ids,
+                                  objective_consequences=tech_and_exp_consequences,
+                                  probability_strings=probability_strings)
+
+plot_choice_problem(choices_critical_faults , c(ME_STR, LE_STR, "E & T"))
+
+#' 
+#' ***
+#' 
+#' ## Calculating Utility {#utility}
+#' 
+#' Next, we use the choice models to calculate utility values. The function `comparePT` returns an overview of values and risks surrounding the choices, based on parameterized models that represent decision maker's preferences. We refer to @Tversky1992cpt for the details about the models and how to calculate the prospect utility. Our goal is to compare and discuss the utility values.
+#' 
+## ---------------------------------------------------------------------------------------
+# Alpha, beta, lambda and prob. weights according to Kahneman & Tversky (1992)
+tk_1992_utility <- Utility(fun="power", par=c(alpha=0.88, beta=0.88, lambda=2.25))
+log_odds_prob_weight <- ProbWeight(fun="linear_in_log_odds", 
+                                   par=c(alpha=0.61, beta=0.724))
+
+cpt_techniques <- comparePT(choices_techniques,
+                            prob_weight_for_positive_outcomes=log_odds_prob_weight,
+                            prob_weight_for_negative_outcomes=log_odds_prob_weight,
+                            utility=tk_1992_utility, digits=4)
+
+cpt_exp_critical <- comparePT(choices_critical_faults,
+                              prob_weight_for_positive_outcomes=log_odds_prob_weight,
+                              prob_weight_for_negative_outcomes=log_odds_prob_weight,
+                              utility=tk_1992_utility, digits=4)
+
+cpt_exp_regular <- comparePT(choices_tech_and_exp_regular,
+                             prob_weight_for_positive_outcomes=log_odds_prob_weight,
+                             prob_weight_for_negative_outcomes=log_odds_prob_weight,
+                             utility=tk_1992_utility, digits=4)
+
+# Merge all tables into one and remove unused columns. 
+# Even though we do not use in our analysis, the pt package also provides information
+# about certainty effects and risk premium about the choice problems.
+merged_table <- bind_rows(cpt_techniques, cpt_exp_regular, cpt_exp_critical) %>%
+  select(-c(cid,ce,rp)) %>% rename("Levels" = "gid", "Expected Value" = "ev", 
+                                   "Prospect Utility" = "pt")
+
+#' 
+## ---- cpt-utility, echo=FALSE-----------------------------------------------------------
+merged_table
+
+#' 
+#' Note that the expected values in Table \@ref(tab:cpt-utility) are simply the average of the obtained levels in the decision trees above (Figures \@ref(fig:cpt-cp1), \@ref(fig:cpt-cp2), \@ref(fig:cpt-cp3-regular) and \@ref(fig:cpt-cp3-critical)). However, they are not adjusted to how humans behave when chosing, hence we compare the prospect utility instead. Note that our choices discussed above agree with the utility values.
+#' 
+#' **In conclusion**, a practitioner would choose as following:
+#' 
+#' * **CP1:** A manager should choose ET over TCT, since ET is more profitable when finding and fixing faults.
+#' 
+#' * **CP2:** Choosing between more and less experienced testers depends on the costs of fixing a fault found after release, as opposed to their individual performance in finding faults. For faults with lower costs, more experienced testers do not add value to the fault detection process.
+#' 
+#' * **CP3:** Given that we are using ET to find faults, the difference in profit based on the experience is small. Similarly to CP2, the decision to hire more experienced
+#' testers is connected to the cost of fixing a fault, rather than the choice of testing technique.
+#' 
+#' ***
+#' 
+#' # Evaluation With Practitioners {#eval}
+#' 
+#' We compare our approach using BDA + CPT to the traditional results of reporting hypothesis testing in terms of $p$-values. We want to see what happens when managers need to make a decision based on both types of descriptions. Therefore, we presented to practitioner our decision trees and the results of the hypotheses testing reported in the original study by @AfzalGITAB2015et and asked them:
+#' 
+#' * **Q1.1:** Based on the presented information, would you **introduce exploratory testing**? (Yes/No);
+#' + **Q1.2:** How confident are you on your decision?
+#' * **Q2.1:** Would you utilize **more senior testers**? (Yes/No).
+#' + **Q2.2:** How confident are you on your decision?
+#' 
+#' Our sample is composed of $N = 15 + 7$ mid to upper managers at two large companies in Sweden. We removed $3 + 2$ cases of missing data for a total of $18$ valid participant's answers. The survey instrument is available here \url{https://tinyurl.com/bdacptsurvey}, and the data is presented in Table \@ref(tab:validation-data)
+#' 
+## ---------------------------------------------------------------------------------------
+raw_validation_df <- read_xlsx("datasets/data.xlsx")
+
+# We'll make use of the columns "Years in company" and "A", "B", "D", "E", "G", 
+# "H", "J", and "K". We rename columns to correpond to our levels (ET, TCT, LE and ME)
+
+# We rename the columns to represent the Traditional vs. Bayesian description
+# (respectively, suffix TRAD and BA.). Columns ending with "L" are answers to 
+# the participant's confidence in a likert scale.
+validation_df <- raw_validation_df %>% select("Experience" = "Years in company", 
+                                              "ET_TRAD" = "A", "ET_TRAD_L" = "B",
+                                              "ME_TRAD" = "D", "ME_TRAD_L" = "E", 
+                                              "ET_BA"   = "G", "ET_BA_L"   = "H", 
+                                              "ME_BA"   = "J", "ME_BA_L"   = "K")
+validation_df <- validation_df %>% drop_na()
+
+#' 
+## ---- validation-data, echo=FALSE-------------------------------------------------------
+validation_df
+#' 
+#' 
+#' Figure \@ref(fig:div-plot-q1) shows that the decision itself (Q1.1) is not influenced by the description provided, but participants seem more confident when using our decision tree from the CPT analysis.
+#' 
+#' 
+## ----div-plot-q1, out.width="100%", fig.height=4, message=FALSE, warning=FALSE, fig.align='center', fig.cap="Diverging plot on decisions related to introducing ET."----
+likert_scores= c("1", "2", "3", "4", "5")
+likert_texts = c("1" = "Not at all confident", "2" = "Slightly confident",
+                 "3" = "Somewhat confident"  , "4" = "Fairly confident", 
+                 "5" = "Completely confident")
+
+yesno_scores= c("0", "1")
+yesno_texts = c("0" = "No", "1" = "Yes")
+
+# Diverging plots for the yes/no answers on Q1.1
+q1_yesno_answers <- validation_df %>% 
+  select("Traditional results" = ET_TRAD, "CPT results"= ET_BA) %>% 
+  mutate_all(~factor(., levels = yesno_scores)) %>% as.data.frame
+
+results_q1_yesno<- likert(q1_yesno_answers)
+q1_yesno_plot   <- create_diverging_plot(results_q1_yesno, yesno_texts, 
+                                         "Would you introduce ET?")
+
+# Diverging plots for the likert scales on Q1.2
+q1_likert_answers <- validation_df %>% 
+  select("Traditional results" = ET_TRAD_L, "CPT results"= ET_BA_L) %>%
+  mutate_all(~factor(., levels = likert_scores)) %>% as.data.frame
+
+results_q1_likert<- likert(q1_likert_answers)
+q1_likert_plot  <- create_diverging_plot(results_q1_likert, likert_texts, 
+                                         "How confident are you in your decision?")
+
+# Combine both plots into a single figure.
+grid.arrange(q1_yesno_plot, q1_likert_plot, ncol = 1, nrow = 2)
+
+#' 
+#' Regarding the decision to hire more senior testers (Q2.1), more participants chose to hire senior testers when presented with the results of our CPT analysis, as opposed to $p$-values. Similarly to Q1.2, participants were also more confident in their decision when reading results from our decision tree.
+#' 
+## ----div-plot-q2, fig.height=4, out.width="100%", fig.align='center', message=FALSE, warning=FALSE, fig.cap="Diverging plot on decisions related to hiring experienced testers"----
+# We repeat the steps above, but now for hiring senior tersters (Q2)
+
+# First, the yes / no questions (Q2.1)
+q2_yesno_answers <- validation_df %>% 
+  select("Traditional results" = ME_TRAD, "CPT results"= ME_BA) %>%
+  mutate_all(~factor(., levels = yesno_scores)) %>% as.data.frame
+
+results_q2_yesno<- likert(q2_yesno_answers)
+q2_yesno_plot <- create_diverging_plot(results_q2_yesno, yesno_texts,
+                                       "Would you hire more senior testers?")
+
+# Then, the likert scale answers (Q2.2)
+q2_likert_answers <- validation_df %>% 
+  select("Traditional results" = ME_TRAD_L, "CPT results"= ME_BA_L) %>%
+  mutate_all(~factor(., levels = likert_scores)) %>% as.data.frame
+
+results_q2_likert <- likert(q2_likert_answers)
+q2_likert_plot <- create_diverging_plot(results_q2_likert, likert_texts,
+                                        "How confident are you in your decision?")
+
+# Lastly, combine both plots into the same figure.
+grid.arrange(q2_yesno_plot, q2_likert_plot, ncol = 1, nrow = 2)
+
+#' 
+#' **In conclusion**, practitioners take somewhat different decisions depending on the format used to report results (in particular in unclear cases). More importantly, the format affects the confidence behin those decisions. For instance, more or less the same proportion of practitioners would adopt \ET, however they reported being more confident with their decisions when presented with the CPT results (Figure \@ref(fig:div-plot-q1)).
