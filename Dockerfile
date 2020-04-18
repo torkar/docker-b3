@@ -34,6 +34,10 @@ RUN install2.r --error sjstats
 
 RUN install2.r --error ggthemes
 
+RUN install2.r --error xml2
+
+RUN install2.r --error roxygen2
+
 RUN install2.r --error /home/rstudio/pt_1.1.tar.gz
 
 RUN install2.r --error rstan 
