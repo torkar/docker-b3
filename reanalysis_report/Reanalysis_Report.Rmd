@@ -569,7 +569,7 @@ FAULT_COST <- 150
 
 SAL_LE <- 100 # $100/h hourly salary for LE
 SAL_ME <- 200 # $200/h hourly salary for ME
-SESSION_TIME  <- 4 # Num hours of work in a session: 4h
+SESSION_TIME  <- 3 # Num hours of work in a session: 4h
 ME_STR <- "ME"
 LE_STR <- "LE"
 ET_STR <- "ET"
