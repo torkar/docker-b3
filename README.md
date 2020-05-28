@@ -14,12 +14,12 @@ then fire up the browser and point it to localhost:8787 and use `rstudio` as use
 ```
 . 
 +-- pdfs/                      # Files used to collect data from practitioners.
-+-- reanalysis_report/         # Material for the reanalysis described in the paper.
++-- doc/                       # Material for the reanalysis described in the paper.
 |   +-- datasets/              # Files with CSV data.
 |   +-- markdown_resourses/    # Resources for the RMarkdown source.
-|   +-- Reanalysis_Script.R    # Implementation exported from the RMarkdown file.
-|   +-- Reanalysis_Report.html # HTML report generated from the RMarkdown file.
-|   +-- Reanalysis_Report.Rmd  # RMarkdown source.
+|   +-- index.R                # Implementation exported from the RMarkdown file.
+|   +-- index.html             # HTML report generated from the RMarkdown file.
+|   +-- index.Rmd              # RMarkdown source.
 |
 +-- validation/                # BDA scripts for our validation.
 +-- brms.R                     # Running our re-analysis with additional models.
@@ -30,6 +30,6 @@ then fire up the browser and point it to localhost:8787 and use `rstudio` as use
 
 If you are interested in ...
 
-* The code for our **re-analysis**, read the `Reanalysis_Report.html` file.
+* The code for our **re-analysis**, read the `Reanalysis_Report.html` file or check it out [online](https://torkar.github.io/docker-b3/).
 * Checking and changing our code, open `Reanalysis_Script.R`. We recommend creating an [R Studio](https://rstudio.com/) project.
 * Exploring other models and getting more details on the BDA workflow, open `brms.R`.
