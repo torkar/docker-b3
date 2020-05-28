@@ -30,6 +30,6 @@ then fire up the browser and point it to localhost:8787 and use `rstudio` as use
 
 If you are interested in ...
 
-* The code for our **re-analysis**, read the `Reanalysis_Report.html` file or check it out [online](https://torkar.github.io/docker-b3/).
+* The code for our **re-analysis**, read the `Reanalysis_Report.html` file or check it out [online](https://torkar.github.io/docker-b3/docs/index.html).
 * Checking and changing our code, open `Reanalysis_Script.R`. We recommend creating an [R Studio](https://rstudio.com/) project.
 * Exploring other models and getting more details on the BDA workflow, open `brms.R`.
