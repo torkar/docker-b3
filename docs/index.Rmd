@@ -9,7 +9,7 @@ output:
 bibliography: [./rmarkdown_resources/papers.bib, ./rmarkdown_resources/packages.bib]
 ---
 
-Below we desribe the re-analysis reported on the paper **"Arguing Practical Significance in Empirical Software Engineering"**.  Note that this R Markdown file can be turned into an R script to be modified in case readers wish to change our models, their parameters, or even adapt it to your own dataset. If so, recall to reference our paper:
+Below we describe the re-analysis reported on the paper **"Arguing Practical Significance in Empirical Software Engineering"**.  Note that this R Markdown file can be turned into an R script to be modified in case readers wish to change our models, their parameters, or even adapt it to your own dataset. If so, recall to reference our paper:
 
 ```
 @article{torkar2020arguing,
