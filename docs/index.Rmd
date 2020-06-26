@@ -161,7 +161,7 @@ We begin by loading and exploring our dataset. The data reveals the number of fa
 
 * **ME:** More experienced tester.
 * **LE:** Less experienced tester.
-* **ET:** Exploratory tesitng.
+* **ET:** Exploratory testing.
 * **TCT:** Test case based testing.
 
 ```{r, dataset-loading}
