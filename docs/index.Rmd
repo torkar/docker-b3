@@ -886,7 +886,7 @@ q2_likert_plot <- create_diverging_plot(results_q2_likert, likert_texts,
 grid.arrange(q2_yesno_plot, q2_likert_plot, ncol = 1, nrow = 2)
 ```
 
-**In conclusion**, practitioners take somewhat different decisions depending on the format used to report results (in particular in unclear cases). More importantly, the format affects the confidence behin those decisions. For instance, more or less the same proportion of practitioners would adopt \ET, however they reported being more confident with their decisions when presented with the CPT results (Figure \@ref(fig:div-plot-q1)).
+**In conclusion**, practitioners take somewhat different decisions depending on the format used to report results (in particular in unclear cases). More importantly, the format affects the confidence behind those decisions. For instance, more or less the same proportion of practitioners would adopt \ET, however they reported being more confident with their decisions when presented with the CPT results (Figure \@ref(fig:div-plot-q1)).
 
 ***
 
@@ -896,7 +896,18 @@ grid.arrange(q2_yesno_plot, q2_likert_plot, ncol = 1, nrow = 2)
 
 ***
 
-# Appendix {#appendix}
+# Appendix A {#appendixA}
+Here we present an addendum to the analysis where we specifically investigate if an interaction effect should be added to the model.
+
+We added an interaction term to the model,
+and found that 
+the mean difference in expected log posterior density 
+between the two models (without and with interaction)
+is $-1.2$ with a standard error of $0.9$. If we assume a $z_{95\%} = 1.96$, the interval would then be $[-2.964; 0.564]$, amply overlapping the origin.
+This indicates that there is no evidence that adding an interaction significantly improves the predictive capabilities of the model.
+
+
+# Appendix B {#appendixB}
 
 Here we present the code for some utils functions used to simplify our R code and save space in this document. Most of the code here is used to simplify data wragling using dplyr and plotting using ggplot.
 

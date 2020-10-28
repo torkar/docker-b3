@@ -23,7 +23,7 @@ then fire up the browser and point it to localhost:8787 and use `rstudio` as use
 |
 +-- validation/                # BDA scripts for our validation.
 +-- brms.R                     # Running our re-analysis with additional models.
-+-- pt_1.1.tar.gz              # Package used for the prospecti theory calculations.
++-- pt_1.1.tar.gz              # Package used for the prospective theory calculations.
 ```
 
 ## Where to start?
