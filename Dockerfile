@@ -4,7 +4,7 @@ LABEL maintainer="richard.torkar@gmail.com"
 
 ENV DEBIAN_FRONTEND noninteractive
 
-COPY pt_1.1.tar.gz data.csv brms.R /home/rstudio/
+COPY pt_1.1.tar.gz data.csv brms.R README.md /home/rstudio/
 
 COPY validation /home/rstudio/validation
 
