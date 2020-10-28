@@ -10,6 +10,8 @@ COPY validation /home/rstudio/validation
 
 COPY docs /home/rstudio/docs
 
+COPY pdfs /home/rstudio/pdfs
+
 FROM base AS apt-get
 RUN apt-get update -qq \ 
   && apt-get -y install apt-utils libgit2-dev libssh2-1-dev libv8-dev libxml2-dev build-essential ed pkg-config apt-utils libglu1-mesa-dev libnlopt-dev nano libgsl-dev libz-dev
