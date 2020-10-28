@@ -8,7 +8,7 @@ COPY pt_1.1.tar.gz data.csv brms.R /home/rstudio/
 
 COPY validation /home/rstudio/validation
 
-# COPY reanalysis_report /home/rstudio/reanalysis_report
+COPY docs /home/rstudio/docs
 
 FROM base AS apt-get
 RUN apt-get update -qq \ 
