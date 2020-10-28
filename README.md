@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/137405305.svg)](https://zenodo.org/badge/latestdoi/137405305)
 # docker-b3
 Docker image accompanying a paper on Bayesian data analysis.
 
